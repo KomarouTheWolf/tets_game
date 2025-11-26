@@ -75,7 +75,12 @@
         }
 
         .monster-box {
-            font-size: 8rem;
+            /* 刪除 font-size: 8rem; */
+            width: 250px;  /* 設定圖片寬度，可自己調整 */
+            height: 250px; /* 設定圖片高度，可自己調整 */
+            object-fit: contain; /* 確保圖片完整顯示，不會變形 */
+            
+            /* 以下保留原本的設定 */
             margin: 20px 0;
             display: inline-block;
             transition: transform 0.1s;
@@ -337,7 +342,7 @@
             </div>
     
             <div class="monster-container">
-                <div class="monster-box" id="monster">🐺</div>
+                <img class="monster-box" id="monster" src="1.png">
                 <div class="bone-effect" id="bone-effect">🦴</div>
             </div>
     
@@ -456,7 +461,7 @@
             btnText.textContent = "⚔️ 攻擊";
             cooldownBar.style.width = '0%';
             
-            document.getElementById('monster').textContent = "🐺";
+            document.getElementById('monster').src = "1.png";
             boneEffect.classList.remove('bone-animate'); // 重置骨頭動畫
             
             logMessage(`------------------------------`, "");
@@ -709,7 +714,7 @@
             }
 
             if (monsterCurrentHp <= 0) {
-                monsterElem.textContent = "🐕";
+                monsterElem.src = "2.jpg";
                 if (isBattleOver) {
                     btn.classList.add('btn-next');
                     btn.disabled = false;
@@ -718,7 +723,7 @@
                     cooldownBar.style.width = '0%';
                 }
             } else {
-                monsterElem.textContent = "🐺";
+                monsterElem.src = "1.png";
             }
         }
 
