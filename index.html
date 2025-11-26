@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>打怪物小遊戲</title>
+    <style>
+        :root {
+            --primary-color: #e74c3c;
+            --bg-color: #2c3e50;
+            --text-color: #ecf0f1;
+            --btn-color: #3498db;
+            --btn-disabled: #7f8c8d;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .game-container {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2rem;
+            border-radius: 15px;
+            text-align: center;
+            width: 350px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+
+        h1 { margin-bottom: 20px; font-size: 1.5rem; }
+
+        /* 怪物狀態區 */
+        .monster-box {
+            font-size: 5rem;
+            margin: 20px 0;
+            transition: transform 0.1s;
+        }
+        
+        .shake { animation: shake 0.5s; }
+
+        .hp-bar-container {
+            width: 100%;
+            background-color: #555;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .hp-bar-fill {
+            height: 100%;
+            background-color: var(--primary-color);
+            width: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .hp-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        /* 攻擊按鈕與冷卻動畫 */
+        #attack-btn {
+            position: relative;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background-color: var(--btn-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            overflow: hidden; /* 為了讓進度條不超出按鈕 */
+            transition: background 0.3s;
+            z-index: 1; /* 確保文字在進度條上方 */
+        }
+
+        #attack-btn:hover:not(:disabled) {
+            background-color: #2980b9;
+        }
+
+        #attack-btn:disabled {
+            background-color: var(--btn-disabled);
+            cursor: not-allowed;
+            color: #ccc;
+        }
+
+        /* 冷卻進度條覆蓋層 */
+        .cooldown-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background-color: rgba(0, 0, 0, 0.3);
+            z-index: -1; /* 放在文字下方 */
+        }
+
+        /* 訊息日誌區 */
+        .log-area {
+            margin-top: 20px;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            text-align: left;
+            border: 1px solid #555;
+        }
+
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #444; padding-bottom: 2px;}
+        .type-damage { color: #ff7675; }
+        .type-heal { color: #55efc4; }
+        .type-miss { color: #ffeaa7; }
+
+        /* 動畫定義 */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <h1>👾 史萊姆討伐戰</h1>
+        
+        <div class="hp-bar-container">
+            <div class="hp-bar-fill" id="hp-bar"></div>
+            <span class="hp-text" id="hp-text">100 / 100</span>
+        </div>
+
+        <div class="monster-box" id="monster">👾</div>
+
+        <button id="attack-btn" onclick="performAction()">
+            <span class="btn-text">⚔️ 攻擊</span>
+            <span class="cooldown-overlay" id="cooldown-bar"></span>
+        </button>
+
+        <div class="log-area" id="game-log">
+            <div class="log-entry">戰鬥開始！請按下攻擊按鈕。</div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. 遊戲設定與資料 ---
+        let monsterMaxHp = 100;
+        let monsterCurrentHp = 100;
+        const cooldownTime = 3000; // 3秒冷卻
+
+        // 定義武器庫 (隨機池)
+        const weapons = [
+            { 
+                name: "生鏽的鐵劍", 
+                type: "damage", 
+                min: 5, 
+                max: 10, 
+                template: "你揮舞{name}，造成了 {value} 點傷害！" 
+            },
+            { 
+                name: "傳說聖劍", 
+                type: "damage", 
+                min: 20, 
+                max: 35, 
+                template: "發出金光！{name}一擊造成了 {value} 點暴擊傷害！" 
+            },
+            { 
+                name: "奇怪的藥水", 
+                type: "heal", 
+                min: 10, 
+                max: 20, 
+                template: "你不小心把藥水丟向怪物... 怪物回復了 {value} 點血量。" 
+            },
+            { 
+                name: "揮空了", 
+                type: "miss", 
+                min: 0, 
+                max: 0, 
+                template: "你腳滑了一下，攻擊無效！(0傷害)" 
+            },
+            { 
+                name: "火焰魔法", 
+                type: "damage", 
+                min: 12, 
+                max: 18, 
+                template: "你施放{name}，燒傷了怪物 {value} 點。" 
+            }
+        ];
+
+        // --- 2. 核心功能 ---
+
+        function performAction() {
+            // 檢查怪物是否已經死亡
+            if (monsterCurrentHp <= 0) {
+                logMessage("怪物已經被打倒了！請重新整理頁面再來一場。", "type-miss");
+                return;
+            }
+
+            const btn = document.getElementById('attack-btn');
+            const btnText = btn.querySelector('.btn-text');
+            const cooldownBar = document.getElementById('cooldown-bar');
+
+            // 1. 隨機選擇武器
+            const weapon = weapons[Math.floor(Math.random() * weapons.length)];
+            
+            // 2. 計算數值 (傷害或補血)
+            // 公式: Math.floor(Math.random() * (Max - Min + 1)) + Min
+            const value = Math.floor(Math.random() * (weapon.max - weapon.min + 1)) + weapon.min;
+
+            // 3. 執行效果與更新畫面
+            processEffect(weapon, value);
+
+            // 4. 處理冷卻 (按鈕禁用與動畫)
+            btn.disabled = true;
+            btnText.textContent = "充能中...";
+            
+            // 使用 CSS Transition 來做充能動畫
+            // 先強制重設寬度為 0 (無動畫)，然後設定為 100% (有動畫)
+            cooldownBar.style.transition = 'none';
+            cooldownBar.style.width = '0%';
+            
+            // 強制瀏覽器重繪 (Reflow)，讓 transition 生效
+            void cooldownBar.offsetWidth; 
+
+            // 開始動畫
+            cooldownBar.style.transition = `width ${cooldownTime}ms linear`;
+            cooldownBar.style.width = '100%';
+
+            // 3秒後恢復
+            setTimeout(() => {
+                btn.disabled = false;
+                btnText.textContent = "⚔️ 攻擊";
+                // 重置動畫條
+                cooldownBar.style.transition = 'none';
+                cooldownBar.style.width = '0%';
+            }, cooldownTime);
+        }
+
+        function processEffect(weapon, value) {
+            const monsterElem = document.getElementById('monster');
+
+            // 替換模板文字
+            let message = weapon.template
+                            .replace("{name}", `<strong>${weapon.name}</strong>`)
+                            .replace("{value}", `<strong>${value}</strong>`);
+
+            if (weapon.type === 'damage') {
+                monsterCurrentHp -= value;
+                monsterElem.classList.remove('shake'); // 重置動畫類別
+                void monsterElem.offsetWidth; // 觸發重繪
+                monsterElem.classList.add('shake'); // 受傷震動特效
+                logMessage(message, "type-damage");
+            } else if (weapon.type === 'heal') {
+                monsterCurrentHp += value;
+                logMessage(message, "type-heal");
+            } else {
+                logMessage(message, "type-miss");
+            }
+
+            updateUI();
+        }
+
+        function updateUI() {
+            // 限制血量範圍
+            if (monsterCurrentHp < 0) monsterCurrentHp = 0;
+            if (monsterCurrentHp > monsterMaxHp) monsterCurrentHp = monsterMaxHp;
+
+            // 更新血條寬度與文字
+            const percentage = (monsterCurrentHp / monsterMaxHp) * 100;
+            document.getElementById('hp-bar').style.width = percentage + "%";
+            document.getElementById('hp-text').textContent = `${monsterCurrentHp} / ${monsterMaxHp}`;
+
+            // 改變怪物表情
+            const monsterElem = document.getElementById('monster');
+            if (monsterCurrentHp <= 0) {
+                monsterElem.textContent = "☠️";
+                logMessage("恭喜！你討伐了怪物！", "type-damage");
+            } else if (monsterCurrentHp < 30) {
+                monsterElem.textContent = "😰";
+            } else {
+                monsterElem.textContent = "👾";
+            }
+        }
+
+        function logMessage(msg, typeClass) {
+            const logArea = document.getElementById('game-log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${typeClass}`;
+            entry.innerHTML = msg;
+            
+            // 新訊息插入在最上方
+            logArea.insertBefore(entry, logArea.firstChild);
+        }
+    </script>
+</body>
+</html>
